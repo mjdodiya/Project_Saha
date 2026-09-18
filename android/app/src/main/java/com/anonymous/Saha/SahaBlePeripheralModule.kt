@@ -20,6 +20,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.ParcelUuid
 import android.provider.Settings
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -42,6 +43,7 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
   private val nodeId = createNodeId()
   private val advertisingName = "SAHA-$nodeId"
   private val connectedCentrals = mutableMapOf<String, BluetoothDevice>()
+  private val notificationSubscribers = mutableSetOf<String>()
 
   private var advertiser: BluetoothLeAdvertiser? = null
   private var gattServer: BluetoothGattServer? = null
@@ -134,13 +136,17 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
       }
       val server = gattServer
       val tx = txCharacteristic
-      if (server == null || tx == null || connectedCentrals.isEmpty()) {
+      if (server == null || tx == null || notificationSubscribers.isEmpty()) {
+        Log.d(LOG_TAG, "TX notification skipped: no subscribed central")
         promise.resolve(false)
         return
       }
-      tx.value = encodeTransportPayload(payload)
-      val queued = connectedCentrals.values.toList().fold(false) { sent, central ->
-        server.notifyCharacteristicChanged(central, tx, false) || sent
+      val bytes = encodeTransportPayload(payload)
+      logTransport("BOUNDARY-H [Native-TX]", payload, bytes)
+      val queued = notificationSubscribers.mapNotNull(connectedCentrals::get).fold(false) { sent, central ->
+        val result = dispatchNotification(server, central, tx, bytes)
+        Log.d(LOG_TAG, "TX notification device=${central.address} queued=$result")
+        result || sent
       }
       promise.resolve(queued)
     }
@@ -183,9 +189,11 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
       synchronized(lock) {
         if (newState == BluetoothProfile.STATE_CONNECTED) {
           connectedCentrals[device.address] = device
+          notificationSubscribers.remove(device.address)
           status = STATUS_CONNECTED
         } else {
           connectedCentrals.remove(device.address)
+          notificationSubscribers.remove(device.address)
           status = if (isAdvertising) STATUS_ADVERTISING else STATUS_STOPPED
         }
         emitCentralConnection(device.address, newState == BluetoothProfile.STATE_CONNECTED)
@@ -224,7 +232,9 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
         return
       }
       if (responseNeeded) gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
+      Log.d(LOG_TAG, "BOUNDARY-G [Native-RX] bytes=${value.size} hex=${value.toHex()}")
       val payload = decodeTransportPayload(value)
+      logTransport("BOUNDARY-G [Native-RX-Decoded]", payload, value)
       emitDataReceived(device.address, payload)
       createProtocolPong(payload)?.let(::notifyCentrals)
     }
@@ -241,8 +251,27 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
       val isTxCccd = descriptor.uuid == SahaBleConfig.clientCharacteristicConfigurationUuid &&
         descriptor.characteristic.uuid == SahaBleConfig.txCharacteristicUuid
       if (isTxCccd && !preparedWrite && offset == 0) {
+        val enablesNotifications = value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ||
+          (value.isNotEmpty() && value[0] == 1.toByte())
+        val disablesNotifications = value.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) ||
+          (value.isNotEmpty() && value[0] == 0.toByte() && (value.size == 1 || value[1] == 0.toByte()))
+        if (!enablesNotifications && !disablesNotifications) {
+          if (responseNeeded) {
+            gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED, offset, null)
+          }
+          return
+        }
         descriptor.value = value
-        if (responseNeeded) gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+        if (enablesNotifications) {
+          notificationSubscribers.add(device.address)
+        } else {
+          notificationSubscribers.remove(device.address)
+        }
+        Log.d(
+          LOG_TAG,
+          "TX CCCD device=${device.address} notificationsEnabled=$enablesNotifications subscribers=${notificationSubscribers.size}",
+        )
+        if (responseNeeded) gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
       } else if (responseNeeded) {
         gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED, offset, null)
       }
@@ -274,15 +303,39 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
     gattServer = null
     txCharacteristic = null
     connectedCentrals.clear()
+    notificationSubscribers.clear()
     isAdvertising = false
+  }
+
+  @Suppress("DEPRECATION")
+  private fun dispatchNotification(
+    server: BluetoothGattServer,
+    central: BluetoothDevice,
+    tx: BluetoothGattCharacteristic,
+    bytes: ByteArray,
+  ): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val status = server.notifyCharacteristicChanged(central, tx, false, bytes)
+      status == android.bluetooth.BluetoothStatusCodes.SUCCESS
+    } else {
+      tx.value = bytes
+      server.notifyCharacteristicChanged(central, tx, false)
+    }
   }
 
   private fun notifyCentrals(payload: String): Boolean {
     val server = gattServer ?: return false
     val tx = txCharacteristic ?: return false
-    tx.value = encodeTransportPayload(payload)
-    return connectedCentrals.values.toList().fold(false) { sent, central ->
-      server.notifyCharacteristicChanged(central, tx, false) || sent
+    if (notificationSubscribers.isEmpty()) {
+      Log.d(LOG_TAG, "TX protocol response skipped: no subscribed central")
+      return false
+    }
+    val bytes = encodeTransportPayload(payload)
+    logTransport("BOUNDARY-H [Native-TX-Pong]", payload, bytes)
+    return notificationSubscribers.mapNotNull(connectedCentrals::get).fold(false) { sent, central ->
+      val result = dispatchNotification(server, central, tx, bytes)
+      Log.d(LOG_TAG, "TX protocol response device=${central.address} queued=$result")
+      result || sent
     }
   }
 
@@ -354,6 +407,13 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
   private fun decodeTransportPayload(value: ByteArray): String =
     String(value, StandardCharsets.UTF_8)
 
+  /** Diagnostic only: records the Android byte boundary without changing it. */
+  private fun logTransport(boundary: String, payload: String, bytes: ByteArray) {
+    Log.d(LOG_TAG, "$boundary chars=${payload.length} utf8Bytes=${bytes.size} hex=${bytes.toHex()} text=$payload")
+  }
+
+  private fun ByteArray.toHex(): String = joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+
   // Ping/pong is part of the established SAHA GATT contract, not a chat feature.
   private fun createProtocolPong(payload: String): String? {
     return try {
@@ -369,6 +429,7 @@ class SahaBlePeripheralModule(private val reactContext: ReactApplicationContext)
 
   private companion object {
     const val MODULE_NAME = "SahaBlePeripheral"
+    const val LOG_TAG = "SahaBlePeripheral"
     const val STATUS_STOPPED = "Stopped"
     const val STATUS_INITIALIZING = "Initializing"
     const val STATUS_ADVERTISING = "Advertising"

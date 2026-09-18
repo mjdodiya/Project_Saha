@@ -73,7 +73,7 @@ export default function DiagnosticsScreen() {
 
         <Section title="Central / Scanner">
           <DiagnosticRow label="Scanning" value={scanner.isScanning ? 'true' : 'false'} />
-          <DiagnosticRow label="Nearby devices" value={String(scanner.totalDeviceCount)} />
+          <DiagnosticRow label="SAHA nodes found" value={String(scanner.totalDeviceCount)} />
           <DiagnosticRow label="Scanner status" value={scanner.status} />
           <DiagnosticRow
             label="Scanner error"

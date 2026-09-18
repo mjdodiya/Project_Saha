@@ -40,6 +40,7 @@ export function useBleChat(
   const connectionAttemptRef = useRef(0);
   const connectionInFlightRef = useRef(false);
   const localNodeIdRef = useRef('UNKNOWN');
+  const connectedCentralDeviceIdRef = useRef<string | null>(null);
   const seenMessageIdsRef = useRef(new Set<string>());
 
   const updateConnectionState = useCallback((state: ChatConnectionState) => {
@@ -65,6 +66,8 @@ export function useBleChat(
       isSelf,
       status,
       timestamp,
+      peerDeviceId,
+      receivedVia,
     }: {
       id: string;
       senderId: string;
@@ -73,17 +76,21 @@ export function useBleChat(
       isSelf: boolean;
       status: ChatMessage['status'];
       timestamp?: number;
+      peerDeviceId?: string;
+      receivedVia?: ChatMessage['receivedVia'];
     }) => {
       if (seenMessageIdsRef.current.has(id)) return;
       seenMessageIdsRef.current.add(id);
 
       console.log(
-        `[SAHA-BLE][CHAT] Adding message to state - Sender: ${senderId}, IsSelf: ${isSelf}, Text: "${content}"`,
+        `[BOUNDARY-K][ReactState] Adding message - id=${id}, senderId=${senderId}, receiverId=${receiverId}, peerDeviceId=${peerDeviceId ?? 'none'}, isSelf=${isSelf}, chars=${content.length}, text="${content}"`,
       );
       const newMessage: ChatMessage = {
         id,
         senderId,
         receiverId,
+        peerDeviceId,
+        receivedVia,
         content,
         text: content,
         timestamp: timestamp ?? Date.now(),
@@ -227,11 +234,21 @@ export function useBleChat(
                 characteristic.value,
               );
               const decodedText = decodeBase64(characteristic.value);
+              const paddingBytes = characteristic.value.endsWith('==')
+                ? 2
+                : characteristic.value.endsWith('=')
+                  ? 1
+                  : 0;
+              console.log(
+                `[SAHA-BLE][CENTRAL][TX] notification Base64 chars=${characteristic.value.length}, raw bytes=${characteristic.value.length / 4 * 3 - paddingBytes}, decoded JSON chars=${decodedText.length}`,
+              );
               const protocolMessage = decodeMessage(decodedText);
               if (protocolMessage.type !== 'message') return;
               console.log(
-                '[SAHA-BLE][CENTRAL][TX] Decoded notification text message:',
-                protocolMessage.payload,
+                `[BOUNDARY-I][Central-TX-Notification] rawBytes=${characteristic.value.length / 4 * 3 - paddingBytes}, decodedChars=${decodedText.length}`,
+              );
+              console.log(
+                `[BOUNDARY-J][DecodedMessage-Central-TX] id=${protocolMessage.id}, payloadChars=${protocolMessage.payload.length}, text="${protocolMessage.payload}"`,
               );
               addMessage({
                 id: protocolMessage.id,
@@ -241,6 +258,8 @@ export function useBleChat(
                 isSelf: false,
                 status: 'received',
                 timestamp: protocolMessage.timestamp * 1000,
+                peerDeviceId: deviceId,
+                receivedVia: 'central',
               });
             }
           },
@@ -315,11 +334,27 @@ export function useBleChat(
     [addMessage, resetChatSession, updateConnectionState],
   );
 
+  useEffect(() => {
+    const centralSub = sahaBlePeripheral.onCentralConnected((event) => {
+      console.log(`[SAHA-BLE][PERIPHERAL] Central ${event.deviceId} connection status: ${event.connected}`);
+      if (event.connected) {
+        connectedCentralDeviceIdRef.current = event.deviceId;
+      } else if (connectedCentralDeviceIdRef.current === event.deviceId) {
+        connectedCentralDeviceIdRef.current = null;
+      }
+    });
+
+    return () => {
+      centralSub.remove();
+    };
+  }, []);
+
   // Handle incoming Peripheral RX write data (Central -> Peripheral)
   useEffect(() => {
     const dataSub = sahaBlePeripheral.onDataReceived((event) => {
       // Incoming message written by a Central to our local Peripheral RX characteristic
       if (event.payload) {
+        connectedCentralDeviceIdRef.current = event.deviceId;
         console.log(
           `[SAHA-BLE][PERIPHERAL][RX] Peripheral received RX payload from Central (${event.deviceId}): "${event.payload}"`,
         );
@@ -329,6 +364,9 @@ export function useBleChat(
         try {
           const protocolMessage = decodeMessage(event.payload);
           if (protocolMessage.type !== 'message') return;
+          console.log(
+            `[BOUNDARY-J][DecodedMessage-Peripheral-RX] id=${protocolMessage.id}, payloadChars=${protocolMessage.payload.length}, text="${protocolMessage.payload}"`,
+          );
           addMessage({
             id: protocolMessage.id,
             senderId:
@@ -339,6 +377,8 @@ export function useBleChat(
             isSelf: false,
             status: 'received',
             timestamp: protocolMessage.timestamp * 1000,
+            peerDeviceId: event.deviceId,
+            receivedVia: 'peripheral',
           });
         } catch (error) {
           console.log(
@@ -383,10 +423,9 @@ export function useBleChat(
         return false;
       }
 
-      const trimmedText = text.trim();
       const outgoingMessage = createChatMessage(
         localNodeIdRef.current,
-        trimmedText,
+        text,
       );
       const receiverId =
         peerIdentityRef.current || targetDeviceName || targetDeviceId || 'peer';
@@ -400,6 +439,7 @@ export function useBleChat(
           isSelf: true,
           status: 'failed',
           timestamp: outgoingMessage.timestamp * 1000,
+          peerDeviceId: targetDeviceId ?? undefined,
         });
       };
 
@@ -417,18 +457,24 @@ export function useBleChat(
         connectionStateRef.current === 'connected'
       ) {
         try {
-          console.log(
-            `[SAHA-BLE][CENTRAL][RX] Central writing text message to RX characteristic (${RX_CHARACTERISTIC_UUID}): "${trimmedText}"`,
-          );
-          const base64Payload = encodeBase64(encodeMessage(outgoingMessage));
-          if (base64Payload.length > SAHA_BLE_CONFIG.maxTransportPayloadBytes) {
+          const jsonString = encodeMessage(outgoingMessage);
+          const rawUtf8ByteLength = new TextEncoder().encode(jsonString).byteLength;
+          const base64Payload = encodeBase64(jsonString);
+
+          console.log(`[BOUNDARY-B][sendMessage] text="${text}", chars=${text.length}`);
+          console.log(`[BOUNDARY-C][protocolJson] id=${outgoingMessage.id}, chars=${jsonString.length}, json="${jsonString}"`);
+          console.log(`[BOUNDARY-D][UTF-8] utf8Bytes=${rawUtf8ByteLength}`);
+          console.log(`[BOUNDARY-E][Base64] base64Chars=${base64Payload.length}`);
+
+          if (rawUtf8ByteLength > SAHA_BLE_CONFIG.maxTransportPayloadBytes) {
             addFailedMessage(
-              'Message is too large for the current BLE payload limit',
+              `Message is too large for the current BLE payload limit (${rawUtf8ByteLength} bytes > ${SAHA_BLE_CONFIG.maxTransportPayloadBytes} max)`,
             );
             return false;
           }
+
           console.log(
-            `[SAHA-BLE][CENTRAL][RX] Encoded Base64 payload length: ${base64Payload.length}`,
+            `[BOUNDARY-F][Central-RX-Write] Writing ${rawUtf8ByteLength} raw bytes (${base64Payload.length} Base64 chars) to RX characteristic (${RX_CHARACTERISTIC_UUID})`,
           );
 
           await connectedDeviceRef.current.writeCharacteristicWithResponseForService(
@@ -451,6 +497,7 @@ export function useBleChat(
             isSelf: true,
             status: 'sent',
             timestamp: outgoingMessage.timestamp * 1000,
+            peerDeviceId: targetDeviceId ?? undefined,
           });
           return true;
         } catch (err) {
@@ -469,31 +516,43 @@ export function useBleChat(
 
       // Fallback or Peripheral Mode: send TX notification to connected Centrals (Peripheral -> Central via TX notification)
       if (sahaBlePeripheral.isAvailable()) {
-        console.log(
-          `[SAHA-BLE][PERIPHERAL][TX] Peripheral sending TX notification to connected Centrals: "${trimmedText}"`,
-        );
-        const encodedMessage = encodeMessage(outgoingMessage);
-        const encodedPayload = encodeBase64(encodedMessage);
-        if (encodedPayload.length > SAHA_BLE_CONFIG.maxTransportPayloadBytes) {
+        const jsonString = encodeMessage(outgoingMessage);
+        const rawUtf8ByteLength = new TextEncoder().encode(jsonString).byteLength;
+        const encodedPayload = encodeBase64(jsonString);
+
+        console.log(`[BOUNDARY-B][sendMessage-Peripheral] text="${text}", chars=${text.length}`);
+        console.log(`[BOUNDARY-C][protocolJson-Peripheral] id=${outgoingMessage.id}, chars=${jsonString.length}, json="${jsonString}"`);
+        console.log(`[BOUNDARY-D][UTF-8-Peripheral] utf8Bytes=${rawUtf8ByteLength}`);
+        console.log(`[BOUNDARY-E][Base64-Peripheral] base64Chars=${encodedPayload.length}`);
+
+        if (rawUtf8ByteLength > SAHA_BLE_CONFIG.maxTransportPayloadBytes) {
           addFailedMessage(
-            'Message is too large for the current BLE payload limit',
+            `Message is too large for the current BLE payload limit (${rawUtf8ByteLength} bytes > ${SAHA_BLE_CONFIG.maxTransportPayloadBytes} max)`,
           );
           return false;
         }
+
+        console.log(
+          `[BOUNDARY-F][Peripheral-TX-Notify] Peripheral dispatching TX notification for ${rawUtf8ByteLength} UTF-8 bytes`,
+        );
+
         const success =
-          await sahaBlePeripheral.sendNotification(encodedMessage);
+          await sahaBlePeripheral.sendNotification(jsonString);
         if (success) {
           console.log(
-            '[SAHA-BLE][PERIPHERAL][TX] TX notification delivered successfully',
+            '[SAHA-BLE][PERIPHERAL][TX] TX notification queued/delivered successfully',
           );
+          const peerAddress = connectedCentralDeviceIdRef.current || targetDeviceId;
           addMessage({
             id: outgoingMessage.id,
             senderId: outgoingMessage.senderId,
-            receiverId: targetDeviceId || 'connected-peer',
+            receiverId: peerIdentityRef.current || peerAddress || 'connected-peer',
+            peerDeviceId: peerAddress ?? undefined,
             content: outgoingMessage.payload,
             isSelf: true,
             status: 'sent',
             timestamp: outgoingMessage.timestamp * 1000,
+            receivedVia: 'peripheral',
           });
           return true;
         } else {

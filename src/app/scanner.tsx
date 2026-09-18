@@ -73,7 +73,6 @@ export default function ScannerScreen() {
     bluetoothState,
     status,
     devices,
-    totalDeviceCount,
     errorMessage,
     isScanning,
     startScan,
@@ -82,7 +81,6 @@ export default function ScannerScreen() {
 
   const { status: peripheralStatus, advertisingName } = peripheral;
 
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'saha'>('all');
   const [selectedDevice, setSelectedDevice] = useState<DiscoveredDevice | null>(
     null,
   );
@@ -109,10 +107,7 @@ export default function ScannerScreen() {
     };
   }, [isScanning]);
 
-  const filteredDevices =
-    selectedFilter === 'saha' ? devices.filter((d) => d.isSahaDevice) : devices;
-
-  const sahaCount = devices.filter((d) => d.isSahaDevice).length;
+  const filteredDevices = devices;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -174,45 +169,11 @@ export default function ScannerScreen() {
           bluetoothState={bluetoothState}
           isScanning={isScanning}
           deviceCount={devices.length}
-          sahaCount={sahaCount}
+          sahaCount={devices.length}
           scanSeconds={scanSeconds}
           errorMessage={errorMessage}
           onStartScan={startScan}
         />
-
-        {/* Filter Tabs */}
-        {devices.length > 0 && (
-          <View style={styles.filterTabsContainer}>
-            <Pressable
-              onPress={() => setSelectedFilter('all')}
-              style={[
-                styles.filterTab,
-                selectedFilter === 'all' && styles.filterTabActive,
-              ]}>
-              <Text
-                style={[
-                  styles.filterTabText,
-                  selectedFilter === 'all' && styles.filterTabTextActive,
-                ]}>
-                All BLE ({totalDeviceCount})
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setSelectedFilter('saha')}
-              style={[
-                styles.filterTab,
-                selectedFilter === 'saha' && styles.filterTabActive,
-              ]}>
-              <Text
-                style={[
-                  styles.filterTabText,
-                  selectedFilter === 'saha' && styles.filterTabTextActive,
-                ]}>
-                SAHA Nodes ({sahaCount})
-              </Text>
-            </Pressable>
-          </View>
-        )}
 
         {/* Discovered Devices List */}
         <View style={styles.devicesList}>
@@ -681,11 +642,12 @@ function DeviceDetailModal({
   const handleOpenChat = () => {
     onClose();
     router.push({
-      pathname: '/chat' as any,
+      pathname: '/conversation' as any,
       params: {
         deviceId: device.id,
         deviceName:
-          device.name ?? (device.isSahaDevice ? 'SAHA Node' : 'BLE Device'),
+          device.name ?? 'SAHA Node',
+        transport: 'central',
       },
     });
   };

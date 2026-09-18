@@ -111,21 +111,17 @@ function DeviceRow({
   isLast: boolean;
   onConnect: () => void;
 }) {
-  const name =
-    device.name ?? (device.isSahaDevice ? 'SAHA Node' : 'Nearby BLE device');
+  const name = device.name ?? 'SAHA Node';
   const isStrong = device.rssi != null && device.rssi >= -75;
 
   return (
     <View style={[styles.deviceRow, !isLast && styles.deviceRowBorder]}>
       <View
-        style={[
-          styles.deviceIcon,
-          device.isSahaDevice && styles.deviceIconActive,
-        ]}>
+      style={[styles.deviceIcon, styles.deviceIconActive]}>
         <Ionicons
           name="bluetooth"
           size={17}
-          color={device.isSahaDevice ? '#3159DB' : '#B5B5B1'}
+          color="#3159DB"
         />
       </View>
       <View style={styles.deviceCopy}>
@@ -169,8 +165,8 @@ function EmptyState({
   status: BleScannerStatus;
   errorMessage: string;
 }) {
-  let message = 'Scan for nearby SAHA nodes and BLE devices.';
-  if (isScanning) message = 'Looking for devices in local range...';
+  let message = 'Scan for nearby SAHA nodes.';
+  if (isScanning) message = 'Looking for nearby SAHA nodes...';
   if (status === 'permission-denied')
     message = errorMessage || 'Bluetooth permission is required.';
   if (status === 'bluetooth-off')

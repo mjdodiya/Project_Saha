@@ -25,6 +25,10 @@ export default function RootLayout() {
           options={{ title: 'Messages' }}
         />
         <Tabs.Screen
+          name="conversation"
+          options={{ href: null }}
+        />
+        <Tabs.Screen
           name="settings"
           options={{ title: 'Settings' }}
         />

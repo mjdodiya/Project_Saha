@@ -24,6 +24,7 @@ export type HomeDesignProps = {
   isScanning: boolean;
   onOpenNearby: () => void;
   onOpenMessages: () => void;
+  onOpenMessage: (message: ChatMessage) => void;
   onDiagnose: () => void;
   onStartNearbyScan: () => void;
 };
@@ -40,6 +41,7 @@ export function HomeDesign({
   isScanning,
   onOpenNearby,
   onOpenMessages,
+  onOpenMessage,
   onDiagnose,
   onStartNearbyScan,
 }: HomeDesignProps) {
@@ -94,7 +96,7 @@ export function HomeDesign({
             recentMessages.map((message) => (
               <Pressable
                 key={message.id}
-                onPress={onOpenMessages}
+                onPress={() => onOpenMessage(message)}
                 style={({ pressed }) => [
                   styles.messageRow,
                   pressed && styles.pressed,
@@ -195,7 +197,7 @@ export function HomeDesign({
 
         <View style={styles.footerNote}>
           <Text style={styles.footerNumber}>{totalBleSignals}</Text>
-          <Text style={styles.footerText}>BLE signals in local range</Text>
+          <Text style={styles.footerText}>SAHA nodes in local range</Text>
         </View>
         <View style={styles.locationTag}>
           <Ionicons

@@ -23,11 +23,12 @@ export default function NearbyScreen() {
 
   const handleConnect = (device: DiscoveredDevice) => {
     router.push({
-      pathname: '/chat',
+      pathname: '/conversation',
       params: {
         deviceId: device.id,
         deviceName:
-          device.name ?? (device.isSahaDevice ? 'SAHA Node' : 'BLE Device'),
+          device.name ?? 'SAHA Node',
+        transport: 'central',
       },
     });
   };

@@ -1,126 +1,69 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
 
-import {
-  ConversationDesign,
-  MessagesDesign,
-  type ConversationPreview,
-} from '@/design/ChatDesign';
+import { MessagesDesign, type ConversationPreview } from '@/design/ChatDesign';
 import { useBleContext } from '@/hooks/BleContext';
 
 export default function ChatScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    deviceId?: string;
-    deviceName?: string;
-  }>();
-  const targetDeviceId = params.deviceId ?? null;
-  const targetDeviceName = params.deviceName ?? null;
-  const { scanner, peripheral, chat, connectToPeer } = useBleContext();
-  const { devices } = scanner;
-  const { nodeId: myNodeId } = peripheral;
-  const {
-    connectionState,
-    messages,
-    peerIdentity,
-    errorMessage,
-    sendMessage,
-    disconnect,
-  } = chat;
+  const { chat } = useBleContext();
 
-  useEffect(() => {
-    if (targetDeviceId) {
-      void connectToPeer(targetDeviceId, targetDeviceName);
-    }
-  }, [targetDeviceId, targetDeviceName, connectToPeer]);
-  const [inputText, setInputText] = useState('');
-  const [isSending, setIsSending] = useState(false);
-
-  const displayName = peerIdentity
-    ? `Node ${peerIdentity}`
-    : targetDeviceName ||
-      (targetDeviceId
-        ? `Device (${targetDeviceId.slice(-5)})`
-        : 'SAHA Broadcast');
-
-  const handleSend = async () => {
-    if (!inputText.trim() || isSending) return;
-    const message = inputText;
-    setInputText('');
-    setIsSending(true);
-    await sendMessage(message);
-    setIsSending(false);
-  };
-
-  if (!targetDeviceId) {
-    const conversations: ConversationPreview[] = devices.map((device) => {
-      const deviceMessage = messages.find((message) =>
-        message.senderId.includes(device.id.slice(-4)),
-      );
-      return {
-        id: device.id,
-        name: device.name ?? (device.isSahaDevice ? 'SAHA Node' : 'BLE Device'),
-        preview: deviceMessage?.text ?? 'Start a conversation',
-        time: deviceMessage ? formatTime(deviceMessage.timestamp) : 'now',
-        isActive: device.isSahaDevice,
-        onPress: () =>
-          router.push({
-            pathname: '/chat',
-            params: {
-              deviceId: device.id,
-              deviceName:
-                device.name ??
-                (device.isSahaDevice ? 'SAHA Node' : 'BLE Device'),
-            },
-          }),
-      };
+  const conversations = buildConversations(chat.messages, (conversation) => {
+    router.push({
+      pathname: '/conversation',
+      params: {
+        deviceId: conversation.deviceId,
+        deviceName: conversation.name,
+        transport: conversation.transport,
+      },
     });
-
-    return (
-      <>
-        <Stack.Screen options={{ headerShown: false }} />
-        <MessagesDesign conversations={conversations} />
-      </>
-    );
-  }
-
-  const connectionLabel =
-    connectionState === 'connected'
-      ? `Connected as ${myNodeId || 'Me'}`
-      : connectionState === 'connecting'
-        ? 'Connecting'
-        : connectionState === 'discovering'
-          ? 'Discovering'
-          : 'Disconnected';
-  const connectionColor =
-    connectionState === 'connected'
-      ? '#19B66A'
-      : connectionState === 'error'
-        ? '#D94B4B'
-        : '#E5A526';
+  });
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ConversationDesign
-        displayName={displayName}
-        connectionLabel={connectionLabel}
-        connectionColor={connectionColor}
-        messages={messages}
-        inputText={inputText}
-        isSending={isSending}
-        isConnecting={
-          connectionState === 'connecting' || connectionState === 'discovering'
-        }
-        errorMessage={errorMessage}
-        onBack={() => router.back()}
-        onDisconnect={() => void disconnect()}
-        onReconnect={() => void connectToPeer(targetDeviceId, targetDeviceName)}
-        onInputChange={setInputText}
-        onSend={() => void handleSend()}
-      />
+      <MessagesDesign conversations={conversations} />
     </>
   );
+}
+
+function buildConversations(
+  messages: ReturnType<typeof useBleContext>['chat']['messages'],
+  onOpen: (conversation: {
+    deviceId?: string;
+    name: string;
+    transport: 'central' | 'peripheral';
+  }) => void,
+): ConversationPreview[] {
+  const latestByPeer = new Map<string, (typeof messages)[number]>();
+
+  for (const message of messages) {
+    const fallbackPeer = message.isSelf ? message.receiverId : message.senderId;
+    const key = message.peerDeviceId ?? fallbackPeer;
+    const current = latestByPeer.get(key);
+    if (!current || current.timestamp < message.timestamp) {
+      latestByPeer.set(key, message);
+    }
+  }
+
+  return [...latestByPeer.entries()]
+    .map(([key, message]) => {
+      const name = message.isSelf ? message.receiverId : message.senderId;
+      const transport = message.receivedVia ?? 'central';
+      return {
+        id: key,
+        name: name.startsWith('SAHA-') ? `Node ${name.slice(5)}` : name,
+        preview: message.text,
+        time: formatTime(message.timestamp),
+        isActive: true,
+        onPress: () =>
+          onOpen({
+            deviceId: message.peerDeviceId,
+            name,
+            transport,
+          }),
+      };
+    })
+    .sort((left, right) => right.time.localeCompare(left.time));
 }
 
 function formatTime(timestamp: number) {

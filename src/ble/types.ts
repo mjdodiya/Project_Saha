@@ -67,6 +67,10 @@ export type ChatMessage = {
   id: string;
   senderId: string;
   receiverId: string;
+  /** Bluetooth identifier for the peer that carried this message. */
+  peerDeviceId?: string;
+  /** The local BLE role used to receive this message. */
+  receivedVia?: 'central' | 'peripheral';
   content: string;
   text: string;
   timestamp: number;

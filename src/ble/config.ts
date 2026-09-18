@@ -28,5 +28,4 @@ export const SAHA_BLE_CONFIG = {
   scanTimeoutMs: 10000,
   requestedMtu: 185,
   maxTransportPayloadBytes: 182,
-  namePrefixes: ['SAHA', 'Saha', 'saha'],
 } as const;

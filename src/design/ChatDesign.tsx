@@ -98,7 +98,7 @@ export type ConversationDesignProps = {
   onDisconnect: () => void;
   onReconnect: () => void;
   onInputChange: (text: string) => void;
-  onSend: () => void;
+  onSend: (submittedText?: string) => void;
 };
 
 export function ConversationDesign({
@@ -214,7 +214,7 @@ export function ConversationDesign({
           <TextInput
             value={inputText}
             onChangeText={onInputChange}
-            onSubmitEditing={onSend}
+            onSubmitEditing={(e) => onSend(e.nativeEvent.text)}
             editable={!isSending}
             returnKeyType="send"
             placeholder="Type a message..."
@@ -224,7 +224,7 @@ export function ConversationDesign({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send message"
-            onPress={onSend}
+            onPress={() => onSend(inputText)}
             disabled={!inputText.trim() || isSending}
             style={({ pressed }) => [
               styles.sendButton,
