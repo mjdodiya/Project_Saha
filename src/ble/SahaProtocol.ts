@@ -16,7 +16,13 @@ export type SahaChatMessage = {
   payload: string;
 };
 
-export type SahaMessage = SahaPing | SahaPong | SahaChatMessage;
+export type SahaAck = {
+  type: 'ack';
+  id: string;
+  messageId: string;
+};
+
+export type SahaMessage = SahaPing | SahaPong | SahaChatMessage | SahaAck;
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -47,7 +53,21 @@ export function createChatMessage(
     timestamp,
     payload,
   };
+
   assertValidMessage(message);
+
+  return message;
+}
+
+export function createAck(messageId: string, id = createId('ack')): SahaAck {
+  const message: SahaAck = {
+    type: 'ack',
+    id,
+    messageId,
+  };
+
+  assertValidMessage(message);
+
   return message;
 }
 
@@ -66,6 +86,7 @@ export function decodeMessage(encoded: string): SahaMessage {
   }
 
   assertValidMessage(parsed);
+
   return parsed;
 }
 
@@ -81,6 +102,16 @@ export function validateMessage(value: unknown): value is SahaMessage {
 
   if (value.type === 'ping' || value.type === 'pong') {
     return Object.keys(value).every((key) => key === 'type' || key === 'id');
+  }
+
+  if (value.type === 'ack') {
+    return (
+      Object.keys(value).every(
+        (key) => key === 'type' || key === 'id' || key === 'messageId',
+      ) &&
+      typeof value.messageId === 'string' &&
+      value.messageId.length > 0
+    );
   }
 
   if (value.type !== 'message') {

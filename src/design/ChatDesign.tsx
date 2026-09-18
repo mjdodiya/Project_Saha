@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   inboxTitle: {
     color: '#111820',
     fontSize: 24,
-    fontWeight: '500',
+    fontWeight: '600',
     marginBottom: 20,
   },
   conversationList: {
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   },
   previewIconActive: { backgroundColor: '#DDE4FF' },
   previewCopy: { flex: 1 },
-  previewName: { color: '#18212A', fontSize: 11, fontWeight: '800' },
+  previewName: { color: '#18212A', fontSize: 11, fontWeight: '600' },
   previewText: { marginTop: 4, color: '#777A7A', fontSize: 10 },
   previewTime: { color: '#B1B1AC', fontSize: 9 },
   emptyInbox: {
@@ -337,13 +337,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: '#18212A',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   emptyText: {
     marginTop: 5,
     color: '#898B87',
     fontSize: 11,
     textAlign: 'center',
+    fontWeight: '600',
   },
   conversationScreen: { flex: 1, backgroundColor: '#F7F6F2' },
   conversationHeader: {
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   connectionDot: { width: 6, height: 6, borderRadius: 3 },
-  connectionText: { color: '#A0A09B', fontSize: 9 },
+  connectionText: { color: '#A0A09B', fontSize: 9, fontWeight: 600 },
   moreButton: { width: 28, alignItems: 'flex-end' },
   reconnectButton: {
     paddingHorizontal: 8,
@@ -387,7 +388,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
   },
-  connectingText: { color: '#898B87', fontSize: 11 },
+  connectingText: { color: '#898B87', fontSize: 11, fontWeight: 600 },
   messagesList: {
     flexGrow: 1,
     justifyContent: 'flex-end',
@@ -421,6 +422,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     color: '#B1B1AC',
     fontSize: 11,
+    fontWeight: 600,
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -431,7 +433,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingBottom: 9,
   },
-  encryptionText: { color: '#B1B1AC', fontSize: 9 },
+  encryptionText: { color: '#B1B1AC', fontSize: 9, fontWeight: 600 },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',

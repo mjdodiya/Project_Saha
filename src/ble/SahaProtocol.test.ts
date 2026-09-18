@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  createAck,
   createChatMessage,
   createPing,
   createPong,
@@ -34,6 +35,46 @@ describe('SAHA message protocol', () => {
 
   test('creates a pong with the request id', () => {
     expect(createPong('test-123')).toEqual({ type: 'pong', id: 'test-123' });
+  });
+
+  test('creates an ACK for a message', () => {
+    expect(createAck('msg-123', 'ack-123')).toEqual({
+      type: 'ack',
+      id: 'ack-123',
+      messageId: 'msg-123',
+    });
+  });
+
+  test('encodes and decodes an ACK', () => {
+    const ack = createAck('msg-123', 'ack-123');
+
+    expect(decodeMessage(encodeMessage(ack))).toEqual(ack);
+  });
+
+  test('rejects invalid ACKs', () => {
+    expect(
+      validateMessage({
+        type: 'ack',
+        id: 'ack-123',
+      }),
+    ).toBe(false);
+
+    expect(
+      validateMessage({
+        type: 'ack',
+        id: 'ack-123',
+        messageId: '',
+      }),
+    ).toBe(false);
+
+    expect(
+      validateMessage({
+        type: 'ack',
+        id: 'ack-123',
+        messageId: 'msg-123',
+        unexpected: true,
+      }),
+    ).toBe(false);
   });
 
   test('encodes and decodes a chat message', () => {
@@ -78,5 +119,6 @@ describe('SAHA message protocol', () => {
     expect(() => createChatMessage('', 'Hello')).toThrow(
       'Invalid SAHA message',
     );
+    expect(() => createAck('')).toThrow('Invalid SAHA message');
   });
 });
