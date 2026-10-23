@@ -1,56 +1,35 @@
-# Welcome to your Expo app 👋
+# SAHA
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Communication without connectivity barriers.**
 
-## Get started
+SAHA is an offline-first communication app designed to keep people connected when internet connectivity is unavailable or unreliable. It explores peer-to-peer communication and multi-hop message forwarding to enable communication through nearby devices.
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- **Peer-to-Peer Messaging:** Communicate directly with nearby devices without requiring internet access for the local connection.
+- **Multi-Hop Communication:** Relay messages through intermediate devices to reach destinations beyond direct connectivity.
+- **Communities & Channels:** Connect multiple people through communities and topic-based group conversations.
+- **Notifications:** Stay informed about incoming messages and community activity.
+- **Offline-First:** Store supported data locally and handle disconnected states gracefully.
 
-2. Start the app
+## Tech Stack
 
-   ```bash
-   npx expo start
-   ```
+- React Native & TypeScript
+- Expo
+- Expo Router
+- Zustand
+- SQLite
+- Bluetooth Low Energy (BLE)
+- EAS Build
 
-In the output, you'll find options to open the app in a
+## Project Status
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+SAHA is currently under active development, with a target production release of **15 January 2027**.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Multi-hop messaging, group communication, notifications, reliability, and security are being developed and validated. Feature availability and delivery guarantees depend on successful implementation and testing on real devices.
 
-## Get a fresh project
+## Vision
 
-When you're ready, run:
+To make communication more resilient, accessible, and community-driven—even when conventional connectivity fails.
 
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**SAHA — Building resilient communication, one connection at a time.**
